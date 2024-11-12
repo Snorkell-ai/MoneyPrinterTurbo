@@ -13,6 +13,25 @@ from app.utils import utils
 
 
 def get_bgm_file(bgm_type: str = "random", bgm_file: str = ""):
+    """Retrieve a background music (BGM) file based on the specified type.
+
+    This function checks if a BGM type is provided and returns a
+    corresponding music file. If a specific BGM file is given and it exists,
+    that file is returned. If the BGM type is "random", it searches for all
+    MP3 files in the designated song directory and randomly selects one to
+    return. If no valid BGM type is provided or no files are found, an empty
+    string is returned.
+
+    Args:
+        bgm_type (str): The type of BGM to retrieve. Defaults to "random".
+        bgm_file (str): The specific BGM file to return if it exists. Defaults to an empty
+            string.
+
+    Returns:
+        str: The path to the selected BGM file or an empty string if no valid file is
+            found.
+    """
+
     if not bgm_type:
         return ""
 
@@ -37,6 +56,33 @@ def combine_videos(
     max_clip_duration: int = 5,
     threads: int = 2,
 ) -> str:
+    """Combine multiple video clips into a single video synchronized with an
+    audio file.
+
+    This function takes a list of video file paths and combines them into a
+    single video that is synchronized with the provided audio file. The
+    videos can be concatenated either sequentially or randomly, based on the
+    specified mode. Each video clip is split into segments of a maximum
+    duration defined by `max_clip_duration`, and the final output video is
+    resized to match the specified aspect ratio. The function also handles
+    audio synchronization, ensuring that the combined video matches the
+    length of the audio.
+
+    Args:
+        combined_video_path (str): The file path where the combined video will be saved.
+        video_paths (List[str]): A list of file paths for the video clips to be combined.
+        audio_file (str): The file path for the audio file to synchronize with the video.
+        video_aspect (VideoAspect?): The aspect ratio of the output video. Defaults to VideoAspect.portrait.
+        video_concat_mode (VideoConcatMode?): The mode for concatenating videos (sequential or random). Defaults to
+            VideoConcatMode.random.
+        max_clip_duration (int?): The maximum duration for each video clip segment in seconds. Defaults to
+            5.
+        threads (int?): The number of threads to use for writing the video file. Defaults to 2.
+
+    Returns:
+        str: The file path of the combined video.
+    """
+
     audio_clip = AudioFileClip(audio_file)
     audio_duration = audio_clip.duration
     logger.info(f"max duration of audio: {audio_duration} seconds")
@@ -142,10 +188,45 @@ def combine_videos(
 
 
 def wrap_text(text, max_width, font="Arial", fontsize=60):
+    """Wrap text to fit within a specified width.
+
+    This function takes a string of text and wraps it so that each line does
+    not exceed the specified maximum width. It uses a specified font and
+    font size to calculate the width of the text. If the text fits within
+    the maximum width, it is returned as is. If it does not fit, the text is
+    split into multiple lines that fit within the specified width. The
+    height of the resulting text block is also calculated based on the
+    number of lines.
+
+    Args:
+        text (str): The text to be wrapped.
+        max_width (int): The maximum width of each line in pixels.
+        font (str?): The font type to use for rendering the text. Defaults to "Arial".
+        fontsize (int?): The size of the font to use for rendering the text. Defaults to 60.
+
+    Returns:
+        tuple: A tuple containing the wrapped text as a string and the height of the
+            resulting text block in pixels.
+    """
+
     # 创建字体对象
     font = ImageFont.truetype(font, fontsize)
 
     def get_text_size(inner_text):
+        """Get the size of the given text.
+
+        This function calculates the bounding box of the provided text using the
+        current font settings. It returns the width and height of the text by
+        determining the difference between the left and right edges, and the top
+        and bottom edges of the bounding box.
+
+        Args:
+            inner_text (str): The text for which to calculate the size.
+
+        Returns:
+            tuple: A tuple containing the width and height of the text.
+        """
+
         inner_text = inner_text.strip()
         left, top, right, bottom = font.getbbox(inner_text)
         return right - left, bottom - top
@@ -206,6 +287,23 @@ def generate_video(
     output_file: str,
     params: VideoParams,
 ):
+    """Generate a video by combining video, audio, and subtitles.
+
+    This function takes a video file, an audio file, and optional subtitles
+    to create a new video file. It handles the positioning and styling of
+    subtitles, adjusts audio levels, and manages the output settings. The
+    function also logs the process and handles background music if
+    specified.
+
+    Args:
+        video_path (str): The path to the input video file.
+        audio_path (str): The path to the input audio file.
+        subtitle_path (str): The path to the subtitle file.
+        output_file (str): The path where the output video file will be saved.
+        params (VideoParams): An object containing various parameters for video generation, such as
+            aspect ratio, font settings, volume levels, and subtitle options.
+    """
+
     aspect = VideoAspect(params.video_aspect)
     video_width, video_height = aspect.to_resolution()
 
@@ -231,6 +329,26 @@ def generate_video(
         logger.info(f"using font: {font_path}")
 
     def create_text_clip(subtitle_item):
+        """Create a text clip for subtitles in a video.
+
+        This function generates a text clip from a given subtitle item. It wraps
+        the text to fit within a specified maximum width and applies various
+        styling options such as font, size, color, and position. The duration of
+        the clip is determined by the start and end times provided in the
+        subtitle item. The function also handles positioning the text clip based
+        on user-defined parameters, ensuring that it appears correctly on the
+        screen.
+
+        Args:
+            subtitle_item (tuple): A tuple containing two elements:
+                - A tuple with start and end times (float, float) for the subtitle.
+                - A string representing the subtitle text.
+
+        Returns:
+            TextClip: A moviepy TextClip object configured with the wrapped text and specified
+                properties.
+        """
+
         phrase = subtitle_item[1]
         max_width = video_width * 0.9
         wrapped_txt, txt_height = wrap_text(
@@ -303,6 +421,26 @@ def generate_video(
 
 
 def preprocess_video(materials: List[MaterialInfo], clip_duration=4):
+    """Preprocess a list of video and image materials.
+
+    This function iterates through a list of materials, checking each
+    material's URL. If the URL is valid, it attempts to create a video clip
+    from the URL. If the creation fails, it tries to create an image clip
+    instead. The function checks the dimensions of the clip and logs a
+    warning if the dimensions are smaller than 480 pixels. For image
+    materials, it creates a zoom effect and outputs the processed video as
+    an MP4 file. The processed materials are updated with the new video
+    URLs.
+
+    Args:
+        materials (List[MaterialInfo]): A list of MaterialInfo objects containing URLs
+            to video or image files.
+        clip_duration (int?): The duration of the clips in seconds. Defaults to 4.
+
+    Returns:
+        List[MaterialInfo]: The updated list of materials with new video URLs.
+    """
+
     for material in materials:
         if not material.url:
             continue

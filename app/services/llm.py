@@ -13,6 +13,29 @@ _max_retries = 5
 
 
 def _generate_response(prompt: str) -> str:
+    """Generate a response from a specified language model provider.
+
+    This function takes a user prompt and interacts with various language
+    model providers (such as OpenAI, G4F, Moonshot, Ollama, Gemini, etc.) to
+    generate a response. It retrieves the necessary configuration settings
+    (like API keys, model names, and base URLs) from the application
+    configuration. Depending on the selected provider, it constructs the
+    appropriate request and processes the response to return the generated
+    content.
+
+    Args:
+        prompt (str): The input prompt for which a response is to be generated.
+
+    Returns:
+        str: The generated response content from the language model.
+
+    Raises:
+        ValueError: If required configuration values such as `api_key`, `model_name`, or
+            `base_url`
+            are not set in the configuration.
+        Exception: If the response from the language model provider is invalid or empty.
+    """
+
     content = ""
     llm_provider = config.app.get("llm_provider", "openai")
     logger.info(f"llm provider: {llm_provider}")
@@ -255,6 +278,29 @@ def _generate_response(prompt: str) -> str:
 def generate_script(
     video_subject: str, language: str = "", paragraph_number: int = 1
 ) -> str:
+    """Generate a video script based on the specified subject.
+
+    This function creates a script for a video by utilizing a prompt that
+    outlines the role of a video script generator. The script is generated
+    according to the specified subject and can be customized by the number
+    of paragraphs and language. The function ensures that the output adheres
+    to specific constraints, such as avoiding any markdown or formatting and
+    not referencing the prompt in the response.
+
+    Args:
+        video_subject (str): The subject of the video for which the script is generated.
+        language (str?): The language in which the script should be generated. Defaults to an
+            empty string.
+        paragraph_number (int?): The number of paragraphs to include in the script. Defaults to 1.
+
+    Returns:
+        str: The generated video script as a plain string.
+
+    Raises:
+        ValueError: If the generated script contains an error message indicating that the
+            daily quota has been exhausted.
+    """
+
     prompt = f"""
 # Role: Video Script Generator
 
@@ -282,6 +328,20 @@ Generate a script for a video, depending on the subject of the video.
     logger.info(f"subject: {video_subject}")
 
     def format_response(response):
+        """Format a response by cleaning and selecting paragraphs.
+
+        This function takes a response string, removes specific characters such
+        as asterisks and hashes, and eliminates markdown syntax. It then splits
+        the cleaned response into paragraphs and selects a specified number of
+        paragraphs to return as a single string.
+
+        Args:
+            response (str): The input response string to be formatted.
+
+        Returns:
+            str: The formatted response containing the selected paragraphs.
+        """
+
         # Clean the script
         # Remove asterisks, hashes
         response = response.replace("*", "")
@@ -325,6 +385,26 @@ Generate a script for a video, depending on the subject of the video.
 
 
 def generate_terms(video_subject: str, video_script: str, amount: int = 5) -> List[str]:
+    """Generate search terms for stock videos based on the video subject.
+
+    This function generates a specified number of search terms related to a
+    given video subject. It constructs a prompt for a video search terms
+    generator and processes the response to extract relevant search terms.
+    The generated terms are expected to be in English and should include the
+    main subject of the video. The function retries the generation process
+    in case of failure and ensures that the output is a valid JSON array of
+    strings.
+
+    Args:
+        video_subject (str): The subject of the video for which search terms are to be generated.
+        video_script (str): The script of the video, which is not used in the output but may provide
+            context.
+        amount (int?): The number of search terms to generate. Defaults to 5.
+
+    Returns:
+        List[str]: A list of generated search terms related to the video subject.
+    """
+
     prompt = f"""
 # Role: Video Search Terms Generator
 
