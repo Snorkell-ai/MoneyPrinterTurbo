@@ -27,6 +27,19 @@ class MemoryState(BaseState):
         progress: int = 0,
         **kwargs,
     ):
+        """Update the state and progress of a task.
+
+        This function updates the specified task's state and progress in the
+        internal task management system. It ensures that the progress value does
+        not exceed 100. Additional keyword arguments can be provided to update
+        other attributes of the task.
+
+        Args:
+            task_id (str): The unique identifier of the task to be updated.
+            state (int?): The new state of the task. Defaults to const.TASK_STATE_PROCESSING.
+            progress (int?): The progress percentage of the task. Defaults to 0.
+        """
+
         progress = int(progress)
         if progress > 100:
             progress = 100
@@ -41,6 +54,16 @@ class MemoryState(BaseState):
         return self._tasks.get(task_id, None)
 
     def delete_task(self, task_id: str):
+        """Delete a task from the task list.
+
+        This function removes a task identified by its unique task ID from the
+        internal task storage. If the provided task ID does not exist in the
+        task list, no action is taken.
+
+        Args:
+            task_id (str): The unique identifier of the task to be deleted.
+        """
+
         if task_id in self._tasks:
             del self._tasks[task_id]
 
@@ -59,6 +82,22 @@ class RedisState(BaseState):
         progress: int = 0,
         **kwargs,
     ):
+        """Update the state and progress of a task in the Redis database.
+
+        This function updates the specified task's state and progress in the
+        Redis database. It ensures that the progress value does not exceed 100
+        and allows for additional fields to be updated through keyword
+        arguments.
+
+        Args:
+            task_id (str): The unique identifier of the task to be updated.
+            state (int?): The new state of the task. Defaults to
+                const.TASK_STATE_PROCESSING.
+            progress (int?): The current progress of the task,
+                represented as a percentage. Defaults to 0.
+            **kwargs: Additional fields to update in the task.
+        """
+
         progress = int(progress)
         if progress > 100:
             progress = 100
@@ -73,6 +112,22 @@ class RedisState(BaseState):
             self._redis.hset(task_id, field, str(value))
 
     def get_task(self, task_id: str):
+        """Retrieve a task from the Redis database using its task ID.
+
+        This function fetches the task data associated with the given task ID
+        from a Redis database. If the task data is found, it decodes the keys
+        from bytes to strings and converts the values to their original types
+        before returning the task as a dictionary. If no task data is found, it
+        returns None.
+
+        Args:
+            task_id (str): The unique identifier for the task to be retrieved.
+
+        Returns:
+            dict or None: A dictionary containing the task data if found,
+            or None if no task data exists for the given task ID.
+        """
+
         task_data = self._redis.hgetall(task_id)
         if not task_data:
             return None
@@ -88,9 +143,20 @@ class RedisState(BaseState):
 
     @staticmethod
     def _convert_to_original_type(value):
-        """
-        Convert the value from byte string to its original data type.
-        You can extend this method to handle other data types as needed.
+        """Convert the value from byte string to its original data type.
+
+        This function attempts to decode a byte string into its original
+        representation. It first decodes the byte string to a UTF-8 string and
+        then tries to evaluate it as a Python literal. If the evaluation fails,
+        it checks if the string represents an integer and converts it
+        accordingly. Additional data type conversions can be added as needed.
+
+        Args:
+            value (bytes): The byte string to be converted.
+
+        Returns:
+            The original data type of the input value, which could be a list,
+            integer, or string.
         """
         value_str = value.decode("utf-8")
 

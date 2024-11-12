@@ -15,6 +15,27 @@ from app.utils import utils
 
 
 def generate_script(task_id, params):
+    """Generate a video script based on provided parameters.
+
+    This function attempts to generate a video script using the provided
+    parameters. If a video script is already provided in the parameters, it
+    will be stripped of leading and trailing whitespace and logged for
+    debugging purposes. If no script is provided, it will call an external
+    language model to generate the script based on the subject, language,
+    and number of paragraphs specified in the parameters. If the script
+    generation fails, the task state is updated to failed, and an error
+    message is logged.
+
+    Args:
+        task_id (str): The identifier for the task being processed.
+        params (object): An object containing parameters for script generation,
+            including video_script, video_subject, video_language,
+            and paragraph_number.
+
+    Returns:
+        str or None: The generated video script if successful; otherwise, None.
+    """
+
     logger.info("\n\n## generating video script")
     video_script = params.video_script.strip()
     if not video_script:
@@ -35,6 +56,30 @@ def generate_script(task_id, params):
 
 
 def generate_terms(task_id, params, video_script):
+    """Generate video terms based on provided parameters.
+
+    This function generates a list of video terms either from the provided
+    `video_terms` in the `params` object or by calling an external language
+    model (LLM) to generate terms based on the `video_subject` and
+    `video_script`. If `video_terms` is provided as a string, it is split
+    into a list. If it is an empty list after processing, the task state is
+    updated to failed.
+
+    Args:
+        task_id (str): The identifier for the task being processed.
+        params (object): An object containing parameters including
+            `video_terms` and `video_subject`.
+        video_script (str): The script for the video which may be
+            used to generate terms.
+
+    Returns:
+        list: A list of generated or provided video terms.
+
+    Raises:
+        ValueError: If `video_terms` is neither a string nor a list
+            of strings.
+    """
+
     logger.info("\n\n## generating video terms")
     video_terms = params.video_terms
     if not video_terms:
@@ -60,6 +105,20 @@ def generate_terms(task_id, params, video_script):
 
 
 def save_script_data(task_id, video_script, video_terms, params):
+    """Save video script data to a JSON file.
+
+    This function creates a JSON file containing the video script, search
+    terms, and additional parameters associated with a specific task. The
+    JSON file is saved in the task directory, which is determined by the
+    provided task ID.
+
+    Args:
+        task_id (str): The identifier for the task.
+        video_script (str): The video script to be saved.
+        video_terms (list): A list of search terms related to the video.
+        params (dict): Additional parameters to be included in the script data.
+    """
+
     script_file = path.join(utils.task_dir(task_id), "script.json")
     script_data = {
         "script": video_script,
@@ -72,6 +131,29 @@ def save_script_data(task_id, video_script, video_terms, params):
 
 
 def generate_audio(task_id, params, video_script):
+    """Generate audio from a video script using text-to-speech.
+
+    This function generates an audio file from the provided video script
+    using a text-to-speech service. It logs the process and checks for
+    potential issues such as language mismatches or network availability. If
+    the audio generation fails, it updates the task state to failed and logs
+    an error message with troubleshooting tips. If successful, it returns
+    the path to the generated audio file, its duration, and the sub_maker
+    object used for audio generation.
+
+    Args:
+        task_id (str): The identifier for the task being processed.
+        params (object): An object containing parameters for voice generation,
+            including voice name and rate.
+        video_script (str): The script that will be converted to audio.
+
+    Returns:
+        tuple: A tuple containing:
+            - str: The path to the generated audio file.
+            - int: The duration of the audio in seconds.
+            - object: The sub_maker object used for audio generation.
+    """
+
     logger.info("\n\n## generating audio")
     audio_file = path.join(utils.task_dir(task_id), "audio.mp3")
     sub_maker = voice.tts(
@@ -95,6 +177,29 @@ def generate_audio(task_id, params, video_script):
 
 
 def generate_subtitle(task_id, params, video_script, sub_maker, audio_file):
+    """Generate subtitles for a video based on the provided parameters.
+
+    This function generates subtitles for a video by utilizing a specified
+    subtitle provider. It first checks if subtitles are enabled in the
+    parameters. If enabled, it attempts to create subtitles using the
+    designated provider (either "edge" or "whisper"). If the "edge" provider
+    fails to create the subtitle file, it falls back to using the "whisper"
+    provider. The generated subtitles are then corrected based on the video
+    script, and the path to the subtitle file is returned.
+
+    Args:
+        task_id (str): The identifier for the task.
+        params (object): An object containing parameters, including
+            whether subtitles are enabled.
+        video_script (str): The script of the video for reference.
+        sub_maker (object): An object responsible for creating subtitles.
+        audio_file (str): The path to the audio file associated with the video.
+
+    Returns:
+        str: The path to the generated subtitle file, or an empty string if
+            subtitles are not enabled or if the subtitle file is invalid.
+    """
+
     if not params.subtitle_enabled:
         return ""
 
@@ -125,6 +230,29 @@ def generate_subtitle(task_id, params, video_script, sub_maker, audio_file):
 
 
 def get_video_materials(task_id, params, video_terms, audio_duration):
+    """Retrieve video materials based on the specified parameters.
+
+    This function processes video materials either from a local source or by
+    downloading them from a specified video source. If the video source is
+    local, it preprocesses the provided materials and returns their URLs. If
+    the source is remote, it attempts to download videos based on the
+    provided search terms and parameters. In case of failure to find valid
+    materials or download videos, it updates the task state to failed and
+    logs an error message.
+
+    Args:
+        task_id (str): The identifier for the task being processed.
+        params (object): An object containing various parameters including video source,
+            materials, and durations.
+        video_terms (list): A list of terms used for searching videos if downloading from a remote
+            source.
+        audio_duration (int): The duration of the audio to be used in the video processing.
+
+    Returns:
+        list or None: A list of URLs of the processed video materials if
+            successful, otherwise None.
+    """
+
     if params.video_source == "local":
         logger.info("\n\n## preprocess local materials")
         materials = video.preprocess_video(
@@ -160,6 +288,29 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
 def generate_final_videos(
         task_id, params, downloaded_videos, audio_file, subtitle_path
 ):
+    """Generate final video files from downloaded videos and audio.
+
+    This function combines a list of downloaded videos into a single video
+    file for each specified video count. It utilizes the provided audio file
+    and subtitles to generate the final output videos. The progress of the
+    video generation is updated throughout the process. The function returns
+    the paths of the final generated videos and the combined video files.
+
+    Args:
+        task_id (str): The identifier for the current task.
+        params (Params): An object containing parameters for video generation,
+            including video count, aspect ratio, clip duration,
+            and thread count.
+        downloaded_videos (list): A list of paths to the downloaded video files.
+        audio_file (str): The path to the audio file to be used in the final videos.
+        subtitle_path (str): The path to the subtitle file to be included in the final videos.
+
+    Returns:
+        tuple: A tuple containing two lists:
+            - list: Paths to the final generated video files.
+            - list: Paths to the combined video files.
+    """
+
     final_video_paths = []
     combined_video_paths = []
     video_concat_mode = (
@@ -207,6 +358,33 @@ def generate_final_videos(
 
 
 def start(task_id, params: VideoParams, stop_at: str = "video"):
+    """Start the video processing task.
+
+    This function orchestrates the video processing workflow by generating a
+    script, terms, audio, subtitles, and final videos based on the provided
+    parameters. It updates the task state throughout the process and allows
+    for stopping at various stages of the workflow. The function handles
+    different video sources and manages progress updates to reflect the
+    current state of the task.
+
+    Args:
+        task_id (str): The unique identifier for the task.
+        params (VideoParams): The parameters required for video processing.
+        stop_at (str?): The stage at which to stop processing.
+            Can be one of "video", "script", "terms", "audio", "subtitle", or
+            "materials". Defaults to "video".
+
+    Returns:
+        dict: A dictionary containing the results of the processing at the specified
+            stop stage, which may include:
+            - script (str): The generated video script.
+            - terms (str): The generated video terms.
+            - audio_file (str): The path to the generated audio file.
+            - audio_duration (float): The duration of the generated audio.
+            - subtitle_path (str): The path to the generated subtitle file.
+            - materials (list): The list of downloaded video materials.
+    """
+
     logger.info(f"start task: {task_id}, stop_at: {stop_at}")
     sm.state.update_task(task_id, state=const.TASK_STATE_PROCESSING, progress=5)
 
